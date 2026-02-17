@@ -14,6 +14,8 @@
     <RootNamespace>MightyOaks</RootNamespace>
   </PropertyGroup>
 
+  <Import Project="Environment.props" Condition="Exists('Environment.props')" />
+
   <ItemGroup>
     <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
     <PackageReference Include="BepInEx.Core" Version="5.*" />
@@ -23,19 +25,19 @@
 
   <ItemGroup>
     <Reference Include="assembly_valheim">
-      <HintPath>/home/marius/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed/assembly_valheim.dll</HintPath>
+      <HintPath>$(ValheimPath)/valheim_Data/Managed/assembly_valheim.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="assembly_utils">
-      <HintPath>/home/marius/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed/assembly_utils.dll</HintPath>
+      <HintPath>$(ValheimPath)/valheim_Data/Managed/assembly_utils.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="assembly_googleanalytics">
-      <HintPath>/home/marius/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed/assembly_googleanalytics.dll</HintPath>
+      <HintPath>$(ValheimPath)/valheim_Data/Managed/assembly_googleanalytics.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="assembly_gui">
-      <HintPath>/home/marius/.local/share/Steam/steamapps/common/Valheim/valheim_Data/Managed/assembly_gui.dll</HintPath>
+      <HintPath>$(ValheimPath)/valheim_Data/Managed/assembly_gui.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
