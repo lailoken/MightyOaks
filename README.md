@@ -1,6 +1,6 @@
 # MightyOaks
 
-![Icon](icon.png)
+![Icon](https://raw.githubusercontent.com/lailoken/MightyOaks/main/icon.png)
 
 A simple Valheim mod that makes Oak trees significantly larger and more majestic.
 
@@ -33,6 +33,7 @@ The configuration file is generated after the first run at `BepInEx/config/com.l
 
 ## Changelog
 
+- **1.1.4**: Fixed broken icon link in README for Thunderstore.
 - **1.1.3**: Switched to direct RPC handshake for reliable version checking during connection.
 - **1.1.2**: Improved server validation stability and fixed disconnects for valid clients.
 - **1.1.1**: Fixed handshake connection issues for valid clients.

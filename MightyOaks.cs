@@ -12,7 +12,7 @@ namespace MightyOaks
     {
         public const string PluginGUID = "com.lailoken.mightyoaks";
         public const string PluginName = "MightyOaks";
-        public const string PluginVersion = "1.1.3";
+        public const string PluginVersion = "1.1.4";
 
         private static ConfigEntry<float> ScalingChance;
         private static ConfigEntry<float> MinScale;
