@@ -23,9 +23,9 @@ namespace MightyOaks
         {
             Logger = base.Logger;
             Enabled = Config.Bind("General", "Enabled", true, "Enable the plugin.");
-            ScalingChance = Config.Bind("General", "ScalingChance", 100f, "Chance (0-100) to scale an Oak tree.");
-            MinScale = Config.Bind("General", "MinScale", 2f, "Minimum scale factor.");
-            MaxScale = Config.Bind("General", "MaxScale", 10f, "Maximum scale factor.");
+            ScalingChance = Config.Bind("General", "ScalingChance", 10f, "Chance (0-100) to scale an Oak tree.");
+            MinScale = Config.Bind("General", "MinScale", 1f, "Minimum scale factor.");
+            MaxScale = Config.Bind("General", "MaxScale", 12f, "Maximum scale factor.");
             MakeInvulnerable = Config.Bind("General", "MakeInvulnerable", true, "Make scaled trees invulnerable.");
 
             Harmony.CreateAndPatchAll(System.Reflection.Assembly.GetExecutingAssembly(), PluginGUID);
