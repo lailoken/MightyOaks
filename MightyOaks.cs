@@ -118,7 +118,15 @@ namespace MightyOaks
                         
                         // Calculate final scale using Lerp
                         scale = Mathf.Lerp(MinScale.Value, MaxScale.Value, biasedT);
+                        
                         ApplyScale(__instance, scale);
+                        zdo.Set(scaleFactorHash, scale);
+
+                        // Log the creation of a new Mighty Oak
+                        // randomT is the raw percentile (0.0 - 1.0). 
+                        // e.g. 0.99 means it's in the top 1% of trees (rarity).
+                        float percentile = randomT * 100f;
+                        _Logger.LogInfo($"New Mighty Oak created! Scale: {scale:F2}x (Rolled {percentile:F1}% percentile)");
                     }
                     
                     // Restore RNG state
