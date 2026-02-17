@@ -16,7 +16,9 @@ namespace MightyOaks
         private static ConfigEntry<float> MinScale;
         private static ConfigEntry<float> MaxScale;
         private static ConfigEntry<float> ScaleExponent;
+        private static ConfigEntry<bool> ScaleToughness;
         private static ConfigEntry<bool> MakeInvulnerable;
+        private static ConfigEntry<float> InvulnerabilityThreshold;
         private static ConfigEntry<bool> Enabled;
         private static BepInEx.Logging.ManualLogSource Logger;
 
@@ -28,7 +30,9 @@ namespace MightyOaks
             MinScale = Config.Bind("General", "MinScale", 1f, "Minimum scale factor.");
             MaxScale = Config.Bind("General", "MaxScale", 12f, "Maximum scale factor.");
             ScaleExponent = Config.Bind("General", "ScaleExponent", 2.0f, "Exponent for scale distribution. 1.0 is linear (uniform). Higher values (e.g. 2.0, 3.0) make large trees rarer.");
-            MakeInvulnerable = Config.Bind("General", "MakeInvulnerable", true, "Make scaled trees invulnerable.");
+            ScaleToughness = Config.Bind("General", "ScaleToughness", true, "If true, scales the tree's health/toughness along with its size.");
+            MakeInvulnerable = Config.Bind("General", "MakeInvulnerable", true, "Enable invulnerability for trees above a certain size.");
+            InvulnerabilityThreshold = Config.Bind("General", "InvulnerabilityThreshold", 2.0f, "Scale threshold above which trees become invulnerable (if MakeInvulnerable is true).");
 
             Harmony.CreateAndPatchAll(System.Reflection.Assembly.GetExecutingAssembly(), PluginGUID);
         }
@@ -135,7 +139,23 @@ namespace MightyOaks
             Logger.LogInfo($"Applying scale {scale} to Oak tree.");
             view.transform.localScale = Vector3.one * scale;
 
-            if (MakeInvulnerable.Value)
+            if (ScaleToughness.Value)
+            {
+                var dest = view.GetComponent<Destructible>();
+                if (dest)
+                {
+                    // Scale health non-linearly (e.g. area/volume based, roughly square of scale)
+                    dest.m_health *= (scale * scale);
+                }
+                
+                var tree = view.GetComponent<TreeBase>();
+                if (tree)
+                {
+                    tree.m_health *= (scale * scale);
+                }
+            }
+
+            if (MakeInvulnerable.Value && scale >= InvulnerabilityThreshold.Value)
             {
                 // Make invulnerable
                 var dest = view.GetComponent<Destructible>();

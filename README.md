@@ -27,7 +27,9 @@ The configuration file is generated after the first run at `BepInEx/config/com.m
 | **MinScale** | 1.0 | Minimum random scale factor. |
 | **MaxScale** | 12.0 | Maximum random scale factor. |
 | **ScaleExponent** | 2.0 | Exponent for scale distribution. 1.0 is linear. Higher values make large trees rarer. |
-| **MakeInvulnerable** | true | If true, scaled oaks cannot be destroyed. |
+| **ScaleToughness** | true | If true, health scales with size (roughly scale^2). |
+| **MakeInvulnerable** | true | Enable invulnerability for trees above a certain size. |
+| **InvulnerabilityThreshold** | 2.0 | Scale threshold above which trees become invulnerable. |
 
 ## Changelog
 
