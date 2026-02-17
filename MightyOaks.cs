@@ -24,7 +24,7 @@ namespace MightyOaks
         {
             Logger = base.Logger;
             Enabled = Config.Bind("General", "Enabled", true, "Enable the plugin.");
-            ScalingChance = Config.Bind("General", "ScalingChance", 10f, "Chance (0-100) to scale an Oak tree.");
+            ScalingChance = Config.Bind("General", "ScalingChance", 25f, "Chance (0-100) to scale an Oak tree.");
             MinScale = Config.Bind("General", "MinScale", 1f, "Minimum scale factor.");
             MaxScale = Config.Bind("General", "MaxScale", 12f, "Maximum scale factor.");
             ScaleExponent = Config.Bind("General", "ScaleExponent", 2.0f, "Exponent for scale distribution. 1.0 is linear (uniform). Higher values (e.g. 2.0, 3.0) make large trees rarer.");
