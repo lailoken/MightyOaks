@@ -62,6 +62,8 @@ namespace MightyOaks
                 int scaleFactorHash = "OakScaleFactor".GetStableHashCode();
                 float currentScale = zdo.GetFloat(scaleFactorHash, 0f);
 
+                Logger.LogInfo($"Found Oak1! Current scale in ZDO: {currentScale}");
+
                 if (currentScale > 0.1f)
                 {
                     // Already has a scale (or marked as 1.0)
