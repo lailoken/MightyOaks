@@ -44,12 +44,6 @@ namespace MightyOaks
             {
                 // Register RPC for config sync
                 ZRoutedRpc.instance.Register<ZPackage>("MightyOaks_ConfigSync", RPC_MightyOaks_ConfigSync);
-                
-                if (!ZNet.instance.IsServer())
-                {
-                    // Request config from server (optional, or wait for server to send)
-                    // Usually server sends on connection
-                }
             }
         }
 
@@ -77,7 +71,7 @@ namespace MightyOaks
 
         private static void RPC_MightyOaks_ConfigSync(long sender, ZPackage pkg)
         {
-            if (ZNet.instance.IsServer()) return; // Server doesn't accept config from clients
+            if (ZNet.instance.IsServer()) return;
 
             _Logger.LogInfo("Received config from server.");
             ScalingChance.Value = pkg.ReadSingle();
@@ -103,7 +97,6 @@ namespace MightyOaks
                 if (zdo == null) return;
 
                 // Identify if this is an Oak tree
-                // We use the prefab name from the ZDO if possible, or check the game object name
                 string prefabName = "";
                 if (ZNetScene.instance)
                 {
@@ -111,7 +104,6 @@ namespace MightyOaks
                     if (prefab) prefabName = prefab.name;
                 }
                 
-                // Fallback to game object name if ZNetScene lookup fails (e.g. during early init)
                 if (string.IsNullOrEmpty(prefabName))
                 {
                     prefabName = __instance.gameObject.name.Replace("(Clone)", "");
@@ -147,7 +139,7 @@ namespace MightyOaks
                         if (world != null) worldSeed = world.m_seed;
                     }
 
-                    // Ensure non-zero seed to avoid issues (though 0 is valid seed, but usually not default)
+                    // Ensure non-zero seed to avoid issues
                     if (worldSeed == 0) worldSeed = 123456; 
 
                     Vector3 pos = __instance.transform.position;
@@ -161,24 +153,15 @@ namespace MightyOaks
                     float scale = 1f;
                     if (UnityEngine.Random.Range(0f, 100f) <= ScalingChance.Value)
                     {
-                        // Use power distribution to make larger trees rarer
-                        // randomT (0.0 to 1.0)
+                        // Use power distribution
                         float randomT = UnityEngine.Random.value;
-                        
-                        // Apply exponent: 
-                        // If Exponent > 1.0, results are biased towards 0.0 (smaller scale)
-                        // If Exponent < 1.0, results are biased towards 1.0 (larger scale)
                         float biasedT = Mathf.Pow(randomT, ScaleExponent.Value);
                         
-                        // Calculate final scale using Lerp
                         scale = Mathf.Lerp(MinScale.Value, MaxScale.Value, biasedT);
                         
                         ApplyScale(__instance, scale);
                         zdo.Set(scaleFactorHash, scale);
 
-                        // Log the creation of a new Mighty Oak
-                        // randomT is the raw percentile (0.0 - 1.0). 
-                        // e.g. 0.99 means it's in the top 1% of trees (rarity).
                         float percentile = randomT * 100f;
                         _Logger.LogInfo($"New Mighty Oak created! Scale: {scale:F2}x (Rolled {percentile:F1}% percentile)");
                     }
@@ -199,7 +182,6 @@ namespace MightyOaks
             // Avoid re-applying if already scaled (prevents double logs/operations)
             if (Mathf.Abs(view.transform.localScale.x - scale) < 0.01f) return;
 
-            // _Logger.LogInfo($"Applying scale {scale} to Oak tree.");
             view.transform.localScale = Vector3.one * scale;
 
             if (ScaleToughness.Value)
@@ -207,7 +189,6 @@ namespace MightyOaks
                 var dest = view.GetComponent<Destructible>();
                 if (dest)
                 {
-                    // Scale health non-linearly (e.g. area/volume based, roughly square of scale)
                     dest.m_health *= (scale * scale);
                 }
                 
@@ -220,11 +201,9 @@ namespace MightyOaks
 
             if (MakeInvulnerable.Value && scale >= InvulnerabilityThreshold.Value)
             {
-                // Make invulnerable
                 var dest = view.GetComponent<Destructible>();
                 if (dest)
                 {
-                    // Set extremely high tool tier requirement
                     dest.m_minToolTier = 1000;
                     dest.m_damages.m_chop = HitData.DamageModifier.Immune;
                     dest.m_damages.m_pickaxe = HitData.DamageModifier.Immune;
