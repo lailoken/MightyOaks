@@ -134,7 +134,10 @@ namespace MightyOaks
         {
             if (scale <= 1.01f) return;
 
-            _Logger.LogInfo($"Applying scale {scale} to Oak tree.");
+            // Avoid re-applying if already scaled (prevents double logs/operations)
+            if (Mathf.Abs(view.transform.localScale.x - scale) < 0.01f) return;
+
+            // _Logger.LogInfo($"Applying scale {scale} to Oak tree.");
             view.transform.localScale = Vector3.one * scale;
 
             if (ScaleToughness.Value)
