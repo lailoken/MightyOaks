@@ -1,6 +1,6 @@
 {
     "name": "MightyOaks",
-    "version_number": "1.0.0",
+    "version_number": "1.1.3",
     "website_url": "https://github.com/lailoken/MightyOaks",
     "description": "Scales Oak trees to be truly mighty in Valheim.",
     "dependencies": [

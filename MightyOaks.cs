@@ -2,6 +2,8 @@ using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
 using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
 
 namespace MightyOaks
 {
@@ -10,7 +12,7 @@ namespace MightyOaks
     {
         public const string PluginGUID = "com.lailoken.mightyoaks";
         public const string PluginName = "MightyOaks";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "1.1.3";
 
         private static ConfigEntry<float> ScalingChance;
         private static ConfigEntry<float> MinScale;
@@ -21,6 +23,9 @@ namespace MightyOaks
         private static ConfigEntry<float> InvulnerabilityThreshold;
         private static ConfigEntry<bool> Enabled;
         private static BepInEx.Logging.ManualLogSource _Logger;
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object> ValidatedPeers = new System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object>();
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object> VerificationStarted = new System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object>();
 
         private void Awake()
         {
@@ -44,7 +49,7 @@ namespace MightyOaks
             {
                 // Register RPCs
                 ZRoutedRpc.instance.Register<ZPackage>("MightyOaks_ConfigSync", RPC_MightyOaks_ConfigSync);
-                ZRoutedRpc.instance.Register<string>("MightyOaks_VersionCheck", RPC_MightyOaks_VersionCheck);
+                // RPC_MightyOaks_VersionCheck is now registered directly on peer RPCs in OnNewConnection
             }
         }
 
@@ -53,32 +58,114 @@ namespace MightyOaks
         {
             static void Postfix(ZNet __instance, ZNetPeer peer)
             {
+                // Register the direct RPC handler on this specific peer's connection
+                // This bypasses ZRoutedRpc and works during the initial handshake phase
+                peer.m_rpc.Register<string>("MightyOaks_VersionCheck", RPC_MightyOaks_VersionCheck);
+
                 if (!__instance.IsServer())
                 {
-                    // Client: Send version to server
+                    // Client: Send version to server immediately using direct RPC
                     peer.m_rpc.Invoke("MightyOaks_VersionCheck", PluginVersion);
                 }
                 else
                 {
-                    // Server: Send config to client (we do this here, but maybe we should wait for version check? 
-                    // Actually, syncing config is harmless if they are about to get kicked, but cleaner to do it after.
-                    // For simplicity, we send config immediately as before.)
-                    SendConfigToPeer(peer);
+                    // Server: Ensure we don't start multiple verification timers for the same peer connection
+                    object dummy;
+                    if (VerificationStarted.TryGetValue(peer, out dummy))
+                    {
+                        return;
+                    }
+                    VerificationStarted.Add(peer, null);
+
+                    // Server: Send config to client
+                    if (peer.m_uid != 0)
+                    {
+                        SendConfigToPeer(peer);
+                    }
+                    
+                    // Start verification timer
+                    __instance.StartCoroutine(VerifyPeer(peer));
                 }
             }
         }
 
-        private static void RPC_MightyOaks_VersionCheck(long sender, string clientVersion)
+        [HarmonyPatch(typeof(ZNet), "Disconnect")]
+        static class ZNet_Disconnect_Patch
+        {
+            static void Prefix(ZNetPeer peer)
+            {
+                if (ZNet.instance.IsServer() && peer != null)
+                {
+                     // Cleanup is automatic with ConditionalWeakTable, but we can log if we want
+                     // or if we used a Dictionary, we'd clean up here. 
+                     // Since we switched to ConditionalWeakTable, we don't strictly need to remove, 
+                     // but explicit cleanup is fine if we were using a Dictionary.
+                     // With ConditionalWeakTable, we don't need to do anything.
+                }
+            }
+        }
+
+        private static IEnumerator VerifyPeer(ZNetPeer peer)
+        {
+            // Give the client 10 seconds to send their version
+            yield return new WaitForSeconds(10f);
+
+            if (peer.m_socket.IsConnected())
+            {
+                object dummy;
+                if (!ValidatedPeers.TryGetValue(peer, out dummy))
+                {
+                    _Logger.LogWarning($"Peer {peer.m_uid} failed to validate MightyOaks version (Timeout). Kicking.");
+                    ZNet.instance.Disconnect(peer);
+                }
+            }
+        }
+
+        private static void RPC_MightyOaks_VersionCheck(ZRpc rpc, string clientVersion)
         {
             if (!ZNet.instance.IsServer()) return;
 
-            _Logger.LogInfo($"Peer {sender} has MightyOaks version: {clientVersion}");
+            // Find the peer associated with this RPC connection
+            ZNetPeer peer = null;
+            foreach (var p in ZNet.instance.GetPeers())
+            {
+                if (p.m_rpc == rpc)
+                {
+                    peer = p;
+                    break;
+                }
+            }
+
+            if (peer == null)
+            {
+                // Fallback: If peer isn't fully in the list yet, we might have to rely on context, 
+                // but usually OnNewConnection adds it to the list before Postfix runs?
+                // Actually ZNet.OnNewConnection adds it to m_peers before calling OnNewConnection on listeners?
+                // Wait, this is a Postfix on ZNet.OnNewConnection.
+                _Logger.LogWarning($"Received version check from unknown RPC connection.");
+                return;
+            }
+
+            long sender = peer.m_uid;
+            _Logger.LogInfo($"Peer {sender} (Socket: {peer.m_socket.GetHostName()}) has MightyOaks version: {clientVersion}");
             
             if (!IsVersionCompatible(clientVersion, PluginVersion))
             {
                 _Logger.LogWarning($"Peer {sender} has incompatible version {clientVersion} (Server: {PluginVersion}). Disconnecting.");
                 // Kick the peer
-                ZNet.instance.Disconnect(ZNet.instance.GetPeer(sender));
+                ZNet.instance.Disconnect(peer);
+                return;
+            }
+
+            object dummy;
+            if (!ValidatedPeers.TryGetValue(peer, out dummy))
+            {
+                ValidatedPeers.Add(peer, null);
+                // Send config now if we skipped it earlier due to ID 0
+                if (peer.m_uid != 0)
+                {
+                    SendConfigToPeer(peer);
+                }
             }
         }
 

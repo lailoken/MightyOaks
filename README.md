@@ -33,4 +33,8 @@ The configuration file is generated after the first run at `BepInEx/config/com.l
 
 ## Changelog
 
+- **1.1.3**: Switched to direct RPC handshake for reliable version checking during connection.
+- **1.1.2**: Improved server validation stability and fixed disconnects for valid clients.
+- **1.1.1**: Fixed handshake connection issues for valid clients.
+- **1.1.0**: Added server-side version enforcement. Clients without the mod will be kicked.
 - **1.0.0**: Initial release.
