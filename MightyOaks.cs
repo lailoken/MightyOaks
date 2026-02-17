@@ -15,6 +15,7 @@ namespace MightyOaks
         private static ConfigEntry<float> ScalingChance;
         private static ConfigEntry<float> MinScale;
         private static ConfigEntry<float> MaxScale;
+        private static ConfigEntry<float> ScaleExponent;
         private static ConfigEntry<bool> MakeInvulnerable;
         private static ConfigEntry<bool> Enabled;
         private static BepInEx.Logging.ManualLogSource Logger;
@@ -26,6 +27,7 @@ namespace MightyOaks
             ScalingChance = Config.Bind("General", "ScalingChance", 10f, "Chance (0-100) to scale an Oak tree.");
             MinScale = Config.Bind("General", "MinScale", 1f, "Minimum scale factor.");
             MaxScale = Config.Bind("General", "MaxScale", 12f, "Maximum scale factor.");
+            ScaleExponent = Config.Bind("General", "ScaleExponent", 2.0f, "Exponent for scale distribution. 1.0 is linear (uniform). Higher values (e.g. 2.0, 3.0) make large trees rarer.");
             MakeInvulnerable = Config.Bind("General", "MakeInvulnerable", true, "Make scaled trees invulnerable.");
 
             Harmony.CreateAndPatchAll(System.Reflection.Assembly.GetExecutingAssembly(), PluginGUID);
@@ -103,7 +105,17 @@ namespace MightyOaks
                     float scale = 1f;
                     if (UnityEngine.Random.Range(0f, 100f) <= ScalingChance.Value)
                     {
-                        scale = UnityEngine.Random.Range(MinScale.Value, MaxScale.Value);
+                        // Use power distribution to make larger trees rarer
+                        // randomT (0.0 to 1.0)
+                        float randomT = UnityEngine.Random.value;
+                        
+                        // Apply exponent: 
+                        // If Exponent > 1.0, results are biased towards 0.0 (smaller scale)
+                        // If Exponent < 1.0, results are biased towards 1.0 (larger scale)
+                        float biasedT = Mathf.Pow(randomT, ScaleExponent.Value);
+                        
+                        // Calculate final scale using Lerp
+                        scale = Mathf.Lerp(MinScale.Value, MaxScale.Value, biasedT);
                         ApplyScale(__instance, scale);
                     }
                     

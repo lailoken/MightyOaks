@@ -26,6 +26,7 @@ The configuration file is generated after the first run at `BepInEx/config/com.m
 | **ScalingChance** | 10 | Percentage chance (0-100) for a new Oak to be scaled. |
 | **MinScale** | 1.0 | Minimum random scale factor. |
 | **MaxScale** | 12.0 | Maximum random scale factor. |
+| **ScaleExponent** | 2.0 | Exponent for scale distribution. 1.0 is linear. Higher values make large trees rarer. |
 | **MakeInvulnerable** | true | If true, scaled oaks cannot be destroyed. |
 
 ## Changelog
