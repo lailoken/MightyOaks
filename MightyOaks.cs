@@ -74,17 +74,44 @@ namespace MightyOaks
                 // If not checked yet and we are the owner, roll for scale
                 if (zdo.IsOwner())
                 {
-                    if (Random.Range(0f, 100f) <= ScalingChance.Value)
+                    // Use deterministic RNG based on World Seed and Tree Position
+                    int worldSeed = 0;
+                    
+                    if (WorldGenerator.instance != null)
                     {
-                        float scale = Random.Range(MinScale.Value, MaxScale.Value);
-                        zdo.Set(scaleFactorHash, scale);
+                         var world = Traverse.Create(WorldGenerator.instance).Field("m_world").GetValue<World>();
+                         if (world != null) worldSeed = world.m_seed;
+                    }
+                    
+                    if (worldSeed == 0 && ZNet.instance != null)
+                    {
+                        var world = Traverse.Create(ZNet.instance).Field("m_world").GetValue<World>();
+                        if (world != null) worldSeed = world.m_seed;
+                    }
+
+                    // Ensure non-zero seed to avoid issues (though 0 is valid seed, but usually not default)
+                    if (worldSeed == 0) worldSeed = 123456; 
+
+                    Vector3 pos = __instance.transform.position;
+                    // Create a unique seed for this tree using simple hash
+                    int treeSeed = worldSeed + (int)(pos.x * 1000) + (int)(pos.z * 1000);
+                    
+                    // Save old RNG state
+                    UnityEngine.Random.State oldState = UnityEngine.Random.state;
+                    UnityEngine.Random.InitState(treeSeed);
+
+                    float scale = 1f;
+                    if (UnityEngine.Random.Range(0f, 100f) <= ScalingChance.Value)
+                    {
+                        scale = UnityEngine.Random.Range(MinScale.Value, MaxScale.Value);
                         ApplyScale(__instance, scale);
                     }
-                    else
-                    {
-                        // Mark as normal (1.0) so we don't check again
-                        zdo.Set(scaleFactorHash, 1f);
-                    }
+                    
+                    // Restore RNG state
+                    UnityEngine.Random.state = oldState;
+
+                    // Save the scale to ZDO so it persists and syncs
+                    zdo.Set(scaleFactorHash, scale);
                 }
             }
         }
