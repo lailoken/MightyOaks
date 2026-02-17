@@ -42,8 +42,9 @@ namespace MightyOaks
         {
             static void Postfix(ZNet __instance)
             {
-                // Register RPC for config sync
+                // Register RPCs
                 ZRoutedRpc.instance.Register<ZPackage>("MightyOaks_ConfigSync", RPC_MightyOaks_ConfigSync);
+                ZRoutedRpc.instance.Register<string>("MightyOaks_VersionCheck", RPC_MightyOaks_VersionCheck);
             }
         }
 
@@ -52,21 +53,62 @@ namespace MightyOaks
         {
             static void Postfix(ZNet __instance, ZNetPeer peer)
             {
-                if (__instance.IsServer())
+                if (!__instance.IsServer())
                 {
-                    _Logger.LogInfo($"Sending config to peer {peer.m_uid}");
-                    ZPackage pkg = new ZPackage();
-                    pkg.Write(ScalingChance.Value);
-                    pkg.Write(MinScale.Value);
-                    pkg.Write(MaxScale.Value);
-                    pkg.Write(ScaleExponent.Value);
-                    pkg.Write(ScaleToughness.Value);
-                    pkg.Write(MakeInvulnerable.Value);
-                    pkg.Write(InvulnerabilityThreshold.Value);
-                    
-                    ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, "MightyOaks_ConfigSync", pkg);
+                    // Client: Send version to server
+                    peer.m_rpc.Invoke("MightyOaks_VersionCheck", PluginVersion);
+                }
+                else
+                {
+                    // Server: Send config to client (we do this here, but maybe we should wait for version check? 
+                    // Actually, syncing config is harmless if they are about to get kicked, but cleaner to do it after.
+                    // For simplicity, we send config immediately as before.)
+                    SendConfigToPeer(peer);
                 }
             }
+        }
+
+        private static void RPC_MightyOaks_VersionCheck(long sender, string clientVersion)
+        {
+            if (!ZNet.instance.IsServer()) return;
+
+            _Logger.LogInfo($"Peer {sender} has MightyOaks version: {clientVersion}");
+            
+            if (!IsVersionCompatible(clientVersion, PluginVersion))
+            {
+                _Logger.LogWarning($"Peer {sender} has incompatible version {clientVersion} (Server: {PluginVersion}). Disconnecting.");
+                // Kick the peer
+                ZNet.instance.Disconnect(ZNet.instance.GetPeer(sender));
+            }
+        }
+
+        private static bool IsVersionCompatible(string v1, string v2)
+        {
+            try
+            {
+                var ver1 = new System.Version(v1);
+                var ver2 = new System.Version(v2);
+                return ver1.Major == ver2.Major && ver1.Minor == ver2.Minor;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void SendConfigToPeer(ZNetPeer peer)
+        {
+            _Logger.LogInfo($"Sending config to peer {peer.m_uid}");
+            ZPackage pkg = new ZPackage();
+            pkg.Write(ScalingChance.Value);
+            pkg.Write(MinScale.Value);
+            pkg.Write(MaxScale.Value);
+            pkg.Write(ScaleExponent.Value);
+            pkg.Write(ScaleToughness.Value);
+            pkg.Write(MakeInvulnerable.Value);
+            pkg.Write(InvulnerabilityThreshold.Value);
+            
+            ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, "MightyOaks_ConfigSync", pkg);
         }
 
         private static void RPC_MightyOaks_ConfigSync(long sender, ZPackage pkg)
