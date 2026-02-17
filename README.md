@@ -18,7 +18,7 @@ A simple Valheim mod that makes Oak trees significantly larger and more majestic
 
 ## Configuration
 
-The configuration file is generated after the first run at `BepInEx/config/com.marius.mightyoaks.cfg`.
+The configuration file is generated after the first run at `BepInEx/config/com.lailoken.mightyoaks.cfg`.
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |

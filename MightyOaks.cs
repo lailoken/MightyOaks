@@ -8,7 +8,7 @@ namespace MightyOaks
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
     public class MightyOaksPlugin : BaseUnityPlugin
     {
-        public const string PluginGUID = "com.marius.mightyoaks";
+        public const string PluginGUID = "com.lailoken.mightyoaks";
         public const string PluginName = "MightyOaks";
         public const string PluginVersion = "1.0.0";
 
@@ -20,11 +20,11 @@ namespace MightyOaks
         private static ConfigEntry<bool> MakeInvulnerable;
         private static ConfigEntry<float> InvulnerabilityThreshold;
         private static ConfigEntry<bool> Enabled;
-        private static BepInEx.Logging.ManualLogSource Logger;
+        private static BepInEx.Logging.ManualLogSource _Logger;
 
         private void Awake()
         {
-            Logger = base.Logger;
+            _Logger = base.Logger;
             Enabled = Config.Bind("General", "Enabled", true, "Enable the plugin.");
             ScalingChance = Config.Bind("General", "ScalingChance", 25f, "Chance (0-100) to scale an Oak tree.");
             MinScale = Config.Bind("General", "MinScale", 1f, "Minimum scale factor.");
@@ -67,8 +67,6 @@ namespace MightyOaks
 
                 int scaleFactorHash = "OakScaleFactor".GetStableHashCode();
                 float currentScale = zdo.GetFloat(scaleFactorHash, 0f);
-
-                Logger.LogInfo($"Found Oak1! Current scale in ZDO: {currentScale}");
 
                 if (currentScale > 0.1f)
                 {
@@ -136,7 +134,7 @@ namespace MightyOaks
         {
             if (scale <= 1.01f) return;
 
-            Logger.LogInfo($"Applying scale {scale} to Oak tree.");
+            _Logger.LogInfo($"Applying scale {scale} to Oak tree.");
             view.transform.localScale = Vector3.one * scale;
 
             if (ScaleToughness.Value)
