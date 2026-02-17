@@ -37,6 +37,60 @@ namespace MightyOaks
             Harmony.CreateAndPatchAll(System.Reflection.Assembly.GetExecutingAssembly(), PluginGUID);
         }
 
+        [HarmonyPatch(typeof(ZNet), "Awake")]
+        static class ZNet_Awake_Patch
+        {
+            static void Postfix(ZNet __instance)
+            {
+                // Register RPC for config sync
+                ZRoutedRpc.instance.Register<ZPackage>("MightyOaks_ConfigSync", RPC_MightyOaks_ConfigSync);
+                
+                if (!ZNet.instance.IsServer())
+                {
+                    // Request config from server (optional, or wait for server to send)
+                    // Usually server sends on connection
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(ZNet), "OnNewConnection")]
+        static class ZNet_OnNewConnection_Patch
+        {
+            static void Postfix(ZNet __instance, ZNetPeer peer)
+            {
+                if (__instance.IsServer())
+                {
+                    _Logger.LogInfo($"Sending config to peer {peer.m_uid}");
+                    ZPackage pkg = new ZPackage();
+                    pkg.Write(ScalingChance.Value);
+                    pkg.Write(MinScale.Value);
+                    pkg.Write(MaxScale.Value);
+                    pkg.Write(ScaleExponent.Value);
+                    pkg.Write(ScaleToughness.Value);
+                    pkg.Write(MakeInvulnerable.Value);
+                    pkg.Write(InvulnerabilityThreshold.Value);
+                    
+                    ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, "MightyOaks_ConfigSync", pkg);
+                }
+            }
+        }
+
+        private static void RPC_MightyOaks_ConfigSync(long sender, ZPackage pkg)
+        {
+            if (ZNet.instance.IsServer()) return; // Server doesn't accept config from clients
+
+            _Logger.LogInfo("Received config from server.");
+            ScalingChance.Value = pkg.ReadSingle();
+            MinScale.Value = pkg.ReadSingle();
+            MaxScale.Value = pkg.ReadSingle();
+            ScaleExponent.Value = pkg.ReadSingle();
+            ScaleToughness.Value = pkg.ReadBool();
+            MakeInvulnerable.Value = pkg.ReadBool();
+            InvulnerabilityThreshold.Value = pkg.ReadSingle();
+            
+            _Logger.LogInfo("Config synced with server.");
+        }
+
         [HarmonyPatch(typeof(ZNetView), "Awake")]
         static class ZNetView_Awake_Patch
         {
