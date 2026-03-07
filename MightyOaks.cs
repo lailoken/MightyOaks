@@ -3,7 +3,6 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using UnityEngine;
 using System.Collections;
-using System.Collections.Generic;
 
 namespace MightyOaks
 {
@@ -12,7 +11,7 @@ namespace MightyOaks
     {
         public const string PluginGUID = "com.lailoken.mightyoaks";
         public const string PluginName = "MightyOaks";
-        public const string PluginVersion = "1.1.4";
+        public const string PluginVersion = "1.1.5";
 
         private static ConfigEntry<float> ScalingChance;
         private static ConfigEntry<float> MinScale;
@@ -23,6 +22,7 @@ namespace MightyOaks
         private static ConfigEntry<float> InvulnerabilityThreshold;
         private static ConfigEntry<bool> Enabled;
         private static BepInEx.Logging.ManualLogSource _Logger;
+        private static readonly int OakScaleFactorHash = "OakScaleFactor".GetStableHashCode();
 
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object> ValidatedPeers = new System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object>();
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object> VerificationStarted = new System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object>();
@@ -47,9 +47,7 @@ namespace MightyOaks
         {
             static void Postfix(ZNet __instance)
             {
-                // Register RPCs
                 ZRoutedRpc.instance.Register<ZPackage>("MightyOaks_ConfigSync", RPC_MightyOaks_ConfigSync);
-                // RPC_MightyOaks_VersionCheck is now registered directly on peer RPCs in OnNewConnection
             }
         }
 
@@ -58,66 +56,27 @@ namespace MightyOaks
         {
             static void Postfix(ZNet __instance, ZNetPeer peer)
             {
-                // Register the direct RPC handler on this specific peer's connection
-                // This bypasses ZRoutedRpc and works during the initial handshake phase
                 peer.m_rpc.Register<string>("MightyOaks_VersionCheck", RPC_MightyOaks_VersionCheck);
 
                 if (!__instance.IsServer())
-                {
-                    // Client: Send version to server immediately using direct RPC
                     peer.m_rpc.Invoke("MightyOaks_VersionCheck", PluginVersion);
-                }
                 else
                 {
-                    // Server: Ensure we don't start multiple verification timers for the same peer connection
-                    object dummy;
-                    if (VerificationStarted.TryGetValue(peer, out dummy))
-                    {
-                        return;
-                    }
+                    if (VerificationStarted.TryGetValue(peer, out _)) return;
                     VerificationStarted.Add(peer, null);
-
-                    // Server: Send config to client
-                    if (peer.m_uid != 0)
-                    {
-                        SendConfigToPeer(peer);
-                    }
-                    
-                    // Start verification timer
+                    if (peer.m_uid != 0) SendConfigToPeer(peer);
                     __instance.StartCoroutine(VerifyPeer(peer));
-                }
-            }
-        }
-
-        [HarmonyPatch(typeof(ZNet), "Disconnect")]
-        static class ZNet_Disconnect_Patch
-        {
-            static void Prefix(ZNetPeer peer)
-            {
-                if (ZNet.instance.IsServer() && peer != null)
-                {
-                     // Cleanup is automatic with ConditionalWeakTable, but we can log if we want
-                     // or if we used a Dictionary, we'd clean up here. 
-                     // Since we switched to ConditionalWeakTable, we don't strictly need to remove, 
-                     // but explicit cleanup is fine if we were using a Dictionary.
-                     // With ConditionalWeakTable, we don't need to do anything.
                 }
             }
         }
 
         private static IEnumerator VerifyPeer(ZNetPeer peer)
         {
-            // Give the client 10 seconds to send their version
             yield return new WaitForSeconds(10f);
-
-            if (peer.m_socket.IsConnected())
+            if (peer.m_socket.IsConnected() && !ValidatedPeers.TryGetValue(peer, out _))
             {
-                object dummy;
-                if (!ValidatedPeers.TryGetValue(peer, out dummy))
-                {
-                    _Logger.LogWarning($"Peer {peer.m_uid} failed to validate MightyOaks version (Timeout). Kicking.");
-                    ZNet.instance.Disconnect(peer);
-                }
+                _Logger.LogWarning($"Peer {peer.m_uid} failed to validate MightyOaks version (timeout). Kicking.");
+                ZNet.instance.Disconnect(peer);
             }
         }
 
@@ -125,47 +84,29 @@ namespace MightyOaks
         {
             if (!ZNet.instance.IsServer()) return;
 
-            // Find the peer associated with this RPC connection
             ZNetPeer peer = null;
             foreach (var p in ZNet.instance.GetPeers())
-            {
-                if (p.m_rpc == rpc)
-                {
-                    peer = p;
-                    break;
-                }
-            }
+                if (p.m_rpc == rpc) { peer = p; break; }
 
             if (peer == null)
             {
-                // Fallback: If peer isn't fully in the list yet, we might have to rely on context, 
-                // but usually OnNewConnection adds it to the list before Postfix runs?
-                // Actually ZNet.OnNewConnection adds it to m_peers before calling OnNewConnection on listeners?
-                // Wait, this is a Postfix on ZNet.OnNewConnection.
-                _Logger.LogWarning($"Received version check from unknown RPC connection.");
+                _Logger.LogWarning("Received MightyOaks version check from unknown peer.");
                 return;
             }
 
-            long sender = peer.m_uid;
-            _Logger.LogInfo($"Peer {sender} (Socket: {peer.m_socket.GetHostName()}) has MightyOaks version: {clientVersion}");
-            
+            _Logger.LogInfo($"Peer {peer.m_uid} has MightyOaks version: {clientVersion}");
+
             if (!IsVersionCompatible(clientVersion, PluginVersion))
             {
-                _Logger.LogWarning($"Peer {sender} has incompatible version {clientVersion} (Server: {PluginVersion}). Disconnecting.");
-                // Kick the peer
+                _Logger.LogWarning($"Peer {peer.m_uid} incompatible version {clientVersion} (server: {PluginVersion}). Kicking.");
                 ZNet.instance.Disconnect(peer);
                 return;
             }
 
-            object dummy;
-            if (!ValidatedPeers.TryGetValue(peer, out dummy))
+            if (!ValidatedPeers.TryGetValue(peer, out _))
             {
                 ValidatedPeers.Add(peer, null);
-                // Send config now if we skipped it earlier due to ID 0
-                if (peer.m_uid != 0)
-                {
-                    SendConfigToPeer(peer);
-                }
+                if (peer.m_uid != 0) SendConfigToPeer(peer);
             }
         }
 
@@ -214,6 +155,53 @@ namespace MightyOaks
             _Logger.LogInfo("Config synced with server.");
         }
 
+        private static int GetWorldSeed()
+        {
+            if (WorldGenerator.instance != null)
+            {
+                var world = Traverse.Create(WorldGenerator.instance).Field("m_world").GetValue<World>();
+                if (world != null) return world.m_seed;
+            }
+            if (ZNet.instance != null)
+            {
+                var world = Traverse.Create(ZNet.instance).Field("m_world").GetValue<World>();
+                if (world != null) return world.m_seed;
+            }
+            return 0;
+        }
+
+        private static bool IsOak1(ZNetView view)
+        {
+            if (!view || !view.IsValid()) return false;
+            string prefabName = "";
+            var zdo = view.GetZDO();
+            if (zdo != null && ZNetScene.instance != null)
+            {
+                var prefab = ZNetScene.instance.GetPrefab(zdo.GetPrefab());
+                if (prefab) prefabName = prefab.name;
+            }
+            if (string.IsNullOrEmpty(prefabName))
+                prefabName = view.gameObject.name.Replace("(Clone)", "");
+            return prefabName == "Oak1";
+        }
+
+        private static float ComputeOakScale(Vector3 pos, int worldSeed)
+        {
+            if (worldSeed == 0) return 1f;
+            int treeSeed = worldSeed + (int)(pos.x * 1000) + (int)(pos.z * 1000);
+            var oldState = Random.state;
+            Random.InitState(treeSeed);
+            float computedScale = 1f;
+            if (Random.Range(0f, 100f) <= ScalingChance.Value)
+            {
+                float randomT = Random.value;
+                float biasedT = Mathf.Pow(randomT, ScaleExponent.Value);
+                computedScale = Mathf.Lerp(MinScale.Value, MaxScale.Value, biasedT);
+            }
+            Random.state = oldState;
+            return computedScale;
+        }
+
         [HarmonyPatch(typeof(ZNetView), "Awake")]
         static class ZNetView_Awake_Patch
         {
@@ -221,124 +209,86 @@ namespace MightyOaks
             {
                 if (!Enabled.Value || !__instance || !__instance.IsValid()) return;
 
-                // Check if we have a valid ZDO
                 ZDO zdo = __instance.GetZDO();
                 if (zdo == null) return;
+                if (!IsOak1(__instance)) return;
 
-                // Identify if this is an Oak tree
-                string prefabName = "";
-                if (ZNetScene.instance)
-                {
-                    GameObject prefab = ZNetScene.instance.GetPrefab(zdo.GetPrefab());
-                    if (prefab) prefabName = prefab.name;
-                }
-                
-                if (string.IsNullOrEmpty(prefabName))
-                {
-                    prefabName = __instance.gameObject.name.Replace("(Clone)", "");
-                }
-
-                if (prefabName != "Oak1") return;
-
-                int scaleFactorHash = "OakScaleFactor".GetStableHashCode();
-                float currentScale = zdo.GetFloat(scaleFactorHash, 0f);
-
+                float currentScale = zdo.GetFloat(OakScaleFactorHash, 0f);
                 if (currentScale > 0.1f)
                 {
-                    // Already has a scale (or marked as 1.0)
                     ApplyScale(__instance, currentScale);
                     return;
                 }
 
-                // If not checked yet and we are the owner, roll for scale
+                int seedNow = GetWorldSeed();
+                float scale = ComputeOakScale(__instance.transform.position, seedNow);
+                bool haveValidSeed = seedNow != 0;
+
                 if (zdo.IsOwner())
                 {
-                    // Use deterministic RNG based on World Seed and Tree Position
-                    int worldSeed = 0;
-                    
-                    if (WorldGenerator.instance != null)
+                    if (haveValidSeed)
                     {
-                         var world = Traverse.Create(WorldGenerator.instance).Field("m_world").GetValue<World>();
-                         if (world != null) worldSeed = world.m_seed;
-                    }
-                    
-                    if (worldSeed == 0 && ZNet.instance != null)
-                    {
-                        var world = Traverse.Create(ZNet.instance).Field("m_world").GetValue<World>();
-                        if (world != null) worldSeed = world.m_seed;
-                    }
-
-                    // Ensure non-zero seed to avoid issues
-                    if (worldSeed == 0) worldSeed = 123456; 
-
-                    Vector3 pos = __instance.transform.position;
-                    // Create a unique seed for this tree using simple hash
-                    int treeSeed = worldSeed + (int)(pos.x * 1000) + (int)(pos.z * 1000);
-                    
-                    // Save old RNG state
-                    UnityEngine.Random.State oldState = UnityEngine.Random.state;
-                    UnityEngine.Random.InitState(treeSeed);
-
-                    float scale = 1f;
-                    if (UnityEngine.Random.Range(0f, 100f) <= ScalingChance.Value)
-                    {
-                        // Use power distribution
-                        float randomT = UnityEngine.Random.value;
-                        float biasedT = Mathf.Pow(randomT, ScaleExponent.Value);
-                        
-                        scale = Mathf.Lerp(MinScale.Value, MaxScale.Value, biasedT);
-                        
+                        zdo.Set(OakScaleFactorHash, scale);
                         ApplyScale(__instance, scale);
-                        zdo.Set(scaleFactorHash, scale);
-
-                        float percentile = randomT * 100f;
-                        _Logger.LogInfo($"New Mighty Oak created! Scale: {scale:F2}x (Rolled {percentile:F1}% percentile)");
+                        _Logger?.LogInfo($"[MightyOaks] Oak1 owner wrote pos={__instance.transform.position} scale={scale:F2} seed={seedNow}");
                     }
-                    
-                    // Restore RNG state
-                    UnityEngine.Random.state = oldState;
-
-                    // Save the scale to ZDO so it persists and syncs
-                    zdo.Set(scaleFactorHash, scale);
+                    else
+                    {
+                        ApplyScale(__instance, scale);
+                        _Logger?.LogInfo($"[MightyOaks] Oak1 owner no-write (seed not ready) pos={__instance.transform.position} scale={scale:F2} seed={seedNow} -> reapply next frame");
+                        if (__instance != null && __instance.gameObject != null)
+                            __instance.StartCoroutine(ReapplyScaleWhenSeedReady(__instance));
+                    }
                 }
+                else
+                {
+                    ApplyScale(__instance, scale);
+                    if (!haveValidSeed && __instance != null && __instance.gameObject != null)
+                        __instance.StartCoroutine(ReapplyScaleWhenSeedReady(__instance));
+                }
+            }
+        }
+
+        private static IEnumerator ReapplyScaleWhenSeedReady(ZNetView view)
+        {
+            yield return null;
+            if (view == null || !view.IsValid()) yield break;
+            ZDO zdo = view.GetZDO();
+            if (zdo == null) yield break;
+            if (zdo.GetFloat(OakScaleFactorHash, 0f) > 0.1f) yield break;
+            int seed = GetWorldSeed();
+            if (seed == 0) yield break;
+            float scale = ComputeOakScale(view.transform.position, seed);
+            ApplyScale(view, scale);
+            if (zdo.IsOwner())
+            {
+                zdo.Set(OakScaleFactorHash, scale);
+                _Logger?.LogInfo($"[MightyOaks] Oak1 reapply owner wrote pos={view.transform.position} scale={scale:F2} seed={seed}");
             }
         }
 
         private static void ApplyScale(ZNetView view, float scale)
         {
             if (scale <= 1.01f) return;
-
-            // Avoid re-applying if already scaled (prevents double logs/operations)
             if (Mathf.Abs(view.transform.localScale.x - scale) < 0.01f) return;
 
             view.transform.localScale = Vector3.one * scale;
 
+            var dest = view.GetComponent<Destructible>();
+            var tree = view.GetComponent<TreeBase>();
             if (ScaleToughness.Value)
             {
-                var dest = view.GetComponent<Destructible>();
-                if (dest)
-                {
-                    dest.m_health *= (scale * scale);
-                }
-                
-                var tree = view.GetComponent<TreeBase>();
-                if (tree)
-                {
-                    tree.m_health *= (scale * scale);
-                }
+                if (dest) dest.m_health *= (scale * scale);
+                if (tree) tree.m_health *= (scale * scale);
             }
-
             if (MakeInvulnerable.Value && scale >= InvulnerabilityThreshold.Value)
             {
-                var dest = view.GetComponent<Destructible>();
                 if (dest)
                 {
                     dest.m_minToolTier = 1000;
                     dest.m_damages.m_chop = HitData.DamageModifier.Immune;
                     dest.m_damages.m_pickaxe = HitData.DamageModifier.Immune;
                 }
-                
-                var tree = view.GetComponent<TreeBase>();
                 if (tree)
                 {
                     tree.m_minToolTier = 1000;
