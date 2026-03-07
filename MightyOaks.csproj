@@ -18,6 +18,7 @@
     <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
     <PackageReference Include="BepInEx.Core" Version="5.*" />
     <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*" />
+    <PackageReference Include="JotunnLib" Version="2.27.1" />
     <PackageReference Include="UnityEngine.Modules" Version="2020.3.33" IncludeAssets="compile" />
     <PackageReference Include="Valheim.GameLibs" Version="*-*" />
   </ItemGroup>

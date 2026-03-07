@@ -1,12 +1,16 @@
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
+using Jotunn;
+using Jotunn.Utils;
 using UnityEngine;
 using System.Collections;
 
 namespace MightyOaks
 {
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
+    [BepInDependency(Main.ModGuid)]
+    [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
     public class MightyOaksPlugin : BaseUnityPlugin
     {
         public const string PluginGUID = "com.lailoken.mightyoaks";
@@ -24,31 +28,26 @@ namespace MightyOaks
         private static BepInEx.Logging.ManualLogSource _Logger;
         private static readonly int OakScaleFactorHash = "OakScaleFactor".GetStableHashCode();
 
+        // Server-side: kick clients that don't have MightyOaks (Jötunn only checks clients that have Jötunn)
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object> ValidatedPeers = new System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object>();
-        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object> VerificationStarted = new System.Runtime.CompilerServices.ConditionalWeakTable<ZNetPeer, object>();
 
         private void Awake()
         {
             _Logger = base.Logger;
-            Enabled = Config.Bind("General", "Enabled", true, "Enable the plugin.");
-            ScalingChance = Config.Bind("General", "ScalingChance", 25f, "Chance (0-100) to scale an Oak tree.");
-            MinScale = Config.Bind("General", "MinScale", 1f, "Minimum scale factor.");
-            MaxScale = Config.Bind("General", "MaxScale", 12f, "Maximum scale factor.");
-            ScaleExponent = Config.Bind("General", "ScaleExponent", 2.0f, "Exponent for scale distribution. 1.0 is linear (uniform). Higher values (e.g. 2.0, 3.0) make large trees rarer.");
-            ScaleToughness = Config.Bind("General", "ScaleToughness", true, "If true, scales the tree's health/toughness along with its size.");
-            MakeInvulnerable = Config.Bind("General", "MakeInvulnerable", true, "Enable invulnerability for trees above a certain size.");
-            InvulnerabilityThreshold = Config.Bind("General", "InvulnerabilityThreshold", 2.0f, "Scale threshold above which trees become invulnerable (if MakeInvulnerable is true).");
+            var synced = new ConfigurationManagerAttributes { IsAdminOnly = true };
+            var chanceRange = new AcceptableValueRange<float>(0f, 100f);
+            var scaleRange = new AcceptableValueRange<float>(0.1f, 100f);
+
+            Enabled = Config.Bind("General", "Enabled", true, new ConfigDescription("Enable the plugin.", null, synced));
+            ScalingChance = Config.Bind("General", "ScalingChance", 25f, new ConfigDescription("Chance (0-100) to scale an Oak tree.", chanceRange, synced));
+            MinScale = Config.Bind("General", "MinScale", 1f, new ConfigDescription("Minimum scale factor.", scaleRange, synced));
+            MaxScale = Config.Bind("General", "MaxScale", 12f, new ConfigDescription("Maximum scale factor.", scaleRange, synced));
+            ScaleExponent = Config.Bind("General", "ScaleExponent", 2.0f, new ConfigDescription("Exponent for scale distribution. 1.0 is linear (uniform). Higher values (e.g. 2.0, 3.0) make large trees rarer.", scaleRange, synced));
+            ScaleToughness = Config.Bind("General", "ScaleToughness", true, new ConfigDescription("If true, scales the tree's health/toughness along with its size.", null, synced));
+            MakeInvulnerable = Config.Bind("General", "MakeInvulnerable", true, new ConfigDescription("Enable invulnerability for trees above a certain size.", null, synced));
+            InvulnerabilityThreshold = Config.Bind("General", "InvulnerabilityThreshold", 2.0f, new ConfigDescription("Scale threshold above which trees become invulnerable (if MakeInvulnerable is true).", scaleRange, synced));
 
             Harmony.CreateAndPatchAll(System.Reflection.Assembly.GetExecutingAssembly(), PluginGUID);
-        }
-
-        [HarmonyPatch(typeof(ZNet), "Awake")]
-        static class ZNet_Awake_Patch
-        {
-            static void Postfix(ZNet __instance)
-            {
-                ZRoutedRpc.instance.Register<ZPackage>("MightyOaks_ConfigSync", RPC_MightyOaks_ConfigSync);
-            }
         }
 
         [HarmonyPatch(typeof(ZNet), "OnNewConnection")]
@@ -59,23 +58,24 @@ namespace MightyOaks
                 peer.m_rpc.Register<string>("MightyOaks_VersionCheck", RPC_MightyOaks_VersionCheck);
 
                 if (!__instance.IsServer())
+                {
+                    // Client: tell server we have MightyOaks and our version
                     peer.m_rpc.Invoke("MightyOaks_VersionCheck", PluginVersion);
+                }
                 else
                 {
-                    if (VerificationStarted.TryGetValue(peer, out _)) return;
-                    VerificationStarted.Add(peer, null);
-                    if (peer.m_uid != 0) SendConfigToPeer(peer);
-                    __instance.StartCoroutine(VerifyPeer(peer));
+                    // Server: client must prove they have the mod within timeout or we kick
+                    __instance.StartCoroutine(VerifyPeerHasMod(peer));
                 }
             }
         }
 
-        private static IEnumerator VerifyPeer(ZNetPeer peer)
+        private static IEnumerator VerifyPeerHasMod(ZNetPeer peer)
         {
             yield return new WaitForSeconds(10f);
             if (peer.m_socket.IsConnected() && !ValidatedPeers.TryGetValue(peer, out _))
             {
-                _Logger.LogWarning($"Peer {peer.m_uid} failed to validate MightyOaks version (timeout). Kicking.");
+                _Logger.LogWarning($"Peer {peer.m_uid} did not send MightyOaks version (missing mod?). Kicking.");
                 ZNet.instance.Disconnect(peer);
             }
         }
@@ -94,20 +94,15 @@ namespace MightyOaks
                 return;
             }
 
-            _Logger.LogInfo($"Peer {peer.m_uid} has MightyOaks version: {clientVersion}");
-
             if (!IsVersionCompatible(clientVersion, PluginVersion))
             {
-                _Logger.LogWarning($"Peer {peer.m_uid} incompatible version {clientVersion} (server: {PluginVersion}). Kicking.");
+                _Logger.LogWarning($"Peer {peer.m_uid} has incompatible MightyOaks version {clientVersion} (server: {PluginVersion}). Kicking.");
                 ZNet.instance.Disconnect(peer);
                 return;
             }
 
             if (!ValidatedPeers.TryGetValue(peer, out _))
-            {
                 ValidatedPeers.Add(peer, null);
-                if (peer.m_uid != 0) SendConfigToPeer(peer);
-            }
         }
 
         private static bool IsVersionCompatible(string v1, string v2)
@@ -122,37 +117,6 @@ namespace MightyOaks
             {
                 return false;
             }
-        }
-
-        private static void SendConfigToPeer(ZNetPeer peer)
-        {
-            _Logger.LogInfo($"Sending config to peer {peer.m_uid}");
-            ZPackage pkg = new ZPackage();
-            pkg.Write(ScalingChance.Value);
-            pkg.Write(MinScale.Value);
-            pkg.Write(MaxScale.Value);
-            pkg.Write(ScaleExponent.Value);
-            pkg.Write(ScaleToughness.Value);
-            pkg.Write(MakeInvulnerable.Value);
-            pkg.Write(InvulnerabilityThreshold.Value);
-            
-            ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, "MightyOaks_ConfigSync", pkg);
-        }
-
-        private static void RPC_MightyOaks_ConfigSync(long sender, ZPackage pkg)
-        {
-            if (ZNet.instance.IsServer()) return;
-
-            _Logger.LogInfo("Received config from server.");
-            ScalingChance.Value = pkg.ReadSingle();
-            MinScale.Value = pkg.ReadSingle();
-            MaxScale.Value = pkg.ReadSingle();
-            ScaleExponent.Value = pkg.ReadSingle();
-            ScaleToughness.Value = pkg.ReadBool();
-            MakeInvulnerable.Value = pkg.ReadBool();
-            InvulnerabilityThreshold.Value = pkg.ReadSingle();
-            
-            _Logger.LogInfo("Config synced with server.");
         }
 
         private static int GetWorldSeed()

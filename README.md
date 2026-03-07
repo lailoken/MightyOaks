@@ -10,8 +10,8 @@ A simple Valheim mod that makes Oak trees significantly larger and more majestic
 - **Configurable Scaling:** By default, Mighty Oaks are scaled between 1.0x and 12.0x their normal size.
 - **Invulnerability:** Mighty Oaks can be set to be invulnerable (default: true), protecting them from accidental chopping.
 - **Persistent:** The scale of each tree is saved in the world data (ZDO). Scale is set when the tree is first loaded by the server/host (owner).
-- **Version enforcement:** Servers kick clients that don't have the mod or have an incompatible version, so no one can be chunk master without the mod—trees never load small and buildings attached to them don't collapse.
-- **Config sync:** Scaling settings are synced from server to clients so everyone uses the same rules.
+- **Version enforcement:** Uses [Jötunn](https://valheim.thunderstore.io/package/ValheimModding/Jotunn/) for server/client mod compatibility. Servers kick clients that don't have the mod or have an incompatible version (major.minor must match), so no one can be chunk master without the mod—trees never load small and buildings attached to them don't collapse.
+- **Config sync:** Scaling settings are synced from server to clients via Jötunn's synchronization (admin-only config); everyone uses the same rules.
 
 ### Persistence and “permanent” display
 
@@ -20,7 +20,8 @@ Scale is stored in the world save (ZDO key `OakScaleFactor`). **Valheim does not
 ## Installation
 
 1. Install [BepInEx for Valheim](https://valheim.thunderstore.io/package/denikson/BepInExPack_Valheim/).
-2. Extract the `MightyOaks` folder into `BepInEx/plugins/`.
+2. Install [Jötunn](https://valheim.thunderstore.io/package/ValheimModding/Jotunn/) (required for version check and config sync).
+3. Extract the `MightyOaks` folder into `BepInEx/plugins/`.
 
 ## Configuration
 
