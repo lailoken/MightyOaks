@@ -6,12 +6,13 @@ A simple Valheim mod that makes Oak trees significantly larger and more majestic
 
 ## Features
 
-- **Giant Oaks:** Oak trees have a configurable chance (default 25%) to spawn as "Mighty Oaks".
-- **Configurable Scaling:** By default, Mighty Oaks are scaled between 1.0x and 12.0x their normal size.
-- **Invulnerability:** Mighty Oaks can be set to be invulnerable (default: true), protecting them from accidental chopping.
-- **Persistent:** The scale of each tree is saved in the world data (ZDO). Scale is set when the tree is first loaded by the server/host (owner).
-- **Version enforcement:** Uses [Jötunn](https://valheim.thunderstore.io/package/ValheimModding/Jotunn/) for server/client mod compatibility. Servers kick clients that don't have the mod or have an incompatible version (major.minor must match), so no one can be chunk master without the mod—trees never load small and buildings attached to them don't collapse.
-- **Config sync:** Scaling settings are synced from server to clients via Jötunn's synchronization (admin-only config); everyone uses the same rules.
+- **Scalable objects:** Per-category chance (0–100) to scale: Oak trees, Ashlands burnt oaks (AshlandsTree6, AshlandsTree6_big), Plains stone columns (HeathRockPillar), Swamp ancient trees (SwampTree2), Mistlands trees (Yggdrasil shoots). 0 = that category is off.
+- **Configurable scaling:** Min/max scale and exponent control size distribution; default scale range 1.0x–10.0x.
+- **Invulnerability:** Trees/objects at or above **InvulnerabilityThreshold** scale become invulnerable. Set threshold to max (scale max + 1) to disable.
+- **Spawn protection:** No scaling within **SpawnProtectionRadius** of world center (default 300). Set 0 to allow everywhere.
+- **Persistent:** Scale is saved in world data (ZDO). Set when the object is first loaded by the server/host (owner).
+- **Version enforcement:** Uses [Jötunn](https://valheim.thunderstore.io/package/ValheimModding/Jotunn/) for server/client mod compatibility. Servers kick clients without the mod or with an incompatible version (major.minor must match).
+- **Config sync:** All settings are synced server → clients via Jötunn (admin-only config); server is master.
 
 ### Persistence and “permanent” display
 
@@ -29,18 +30,21 @@ The configuration file is generated after the first run at `BepInEx/config/com.l
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| **Enabled** | true | Enable the plugin. |
-| **ScalingChance** | 25 | Percentage chance (0-100) for a new Oak to be scaled. |
-| **MinScale** | 1.0 | Minimum random scale factor. |
-| **MaxScale** | 12.0 | Maximum random scale factor. |
-| **ScaleExponent** | 2.0 | Exponent for scale distribution. 1.0 is linear. Higher values make large trees rarer. |
-| **ScaleToughness** | true | If true, health scales with size (roughly scale^2). |
-| **MakeInvulnerable** | true | Enable invulnerability for trees above a certain size. |
-| **InvulnerabilityThreshold** | 2.0 | Scale threshold above which trees become invulnerable. |
+| **ChanceScaleOak** | 15 | Chance (0–100) to scale Oak trees. 0 = off. |
+| **ChanceScaleAshlandsOaks** | 5 | Chance (0–100) to scale Ashlands burnt oaks (AshlandsTree6, AshlandsTree6_big). 0 = off. |
+| **ChanceScalePlainsStoneColumns** | 0 | Chance (0–100) to scale Plains stone columns (HeathRockPillar). 0 = off. (10% recommended)|
+| **ChanceScaleSwampAncientTrees** | 0 | Chance (0–100) to scale Swamp ancient trees (SwampTree2). 0 = off. (1% recommended)|
+| **ChanceScaleMistlandsTrees** | 0 | Chance (0–100) to scale Mistlands trees (Yggdrasil shoots: YggaShoot1–3). 0 = off. (1% recommended) |
+| **MinScale** | 1.0 | Minimum random scale factor (range 0.1–20). |
+| **MaxScale** | 10.0 | Maximum random scale factor (range 0.1–20). |
+| **ScaleExponent** | 3.0 | Exponent for scale distribution. 1.0 = linear; higher = large scales rarer. |
+| **ScaleToughness** | true | If true, health scales with size (roughly scale²). |
+| **InvulnerabilityThreshold** | 2.0 | Scale ≥ this → invulnerable. Range 0 to 21 (scale max+1); set to 21 to disable. |
+| **SpawnProtectionRadius** | 300 | Radius from world center where no scaling. Set 0 to allow everywhere. |
 
 ## Changelog
 
-- **1.1.5**: Deterministic oak scale from world seed + position; only write to ZDO when the real world seed is available (no fallback). Fixes trees changing size on reload or when re-entering an area. Same defaults and protocol as 1.1.4; compatible with 1.1.x.
+- **1.2.0**: Deterministic scale from world seed + position; only write to ZDO when world seed is available. Chance-based options per category (ChanceScaleOak, ChanceScaleAshlandsOaks, ChanceScalePlainsStoneColumns, ChanceScaleSwampAncientTrees, ChanceScaleMistlandsTrees); 0 = off. Removed Enabled and scale-on bools. Invulnerability via InvulnerabilityThreshold only (range 0 to scale max+1; set max to disable). Scale Ashlands oaks (AshlandsTree6, 6_big), Plains columns (HeathRockPillar), Swamp ancient trees (SwampTree2), Mistlands trees (YggaShoot1–3). Spawn protection radius (default 300). Jötunn config sync; server-side mod check for clients without Jötunn.
 - **1.1.4**: Fixed broken icon link in README for Thunderstore.
 - **1.1.3**: Switched to direct RPC handshake for reliable version checking during connection.
 - **1.1.2**: Improved server validation stability and fixed disconnects for valid clients.
