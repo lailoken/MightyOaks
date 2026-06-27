@@ -44,6 +44,7 @@ The configuration file is generated after the first run at `BepInEx/config/com.l
 
 ## Changelog
 
+- **1.2.1**: Fix Valheim 1.0 test build crash (`StringExtensionMethods.GetStableHashCode` removed). Inlined Valheim's stable hash algorithm so ZDO keys and existing saves remain identical. Compatible with 1.2.0 clients (major.minor match).
 - **1.2.0**: Deterministic scale from world seed + position; only write to ZDO when world seed is available. Chance-based options per category (ChanceScaleOak, ChanceScaleAshlandsOaks, ChanceScalePlainsStoneColumns, ChanceScaleSwampAncientTrees, ChanceScaleMistlandsTrees); 0 = off. Removed Enabled and scale-on bools. Invulnerability via InvulnerabilityThreshold only (range 0 to scale max+1; set max to disable). Scale Ashlands oaks (AshlandsTree6, 6_big), Plains columns (HeathRockPillar), Swamp ancient trees (SwampTree2), Mistlands trees (YggaShoot1–3). Spawn protection radius (default 300). Jötunn config sync; server-side mod check for clients without Jötunn.
 - **1.1.4**: Fixed broken icon link in README for Thunderstore.
 - **1.1.3**: Switched to direct RPC handshake for reliable version checking during connection.
